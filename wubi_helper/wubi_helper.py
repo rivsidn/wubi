@@ -34,7 +34,12 @@ class QueryResult:
     main_code: str
     all_codes: tuple[str, ...]
     mode: str
+    code_mode: str
     note: str
+
+    @property
+    def other_codes(self) -> tuple[str, ...]:
+        return tuple(code for code in self.all_codes if code != self.main_code)
 
 
 KEY_METAS: dict[str, KeyMeta] = {
@@ -82,6 +87,11 @@ PRIMARY_DB_CANDIDATES = (
 )
 
 KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
+CODE_MODE_LABELS = {
+    "preferred": "推荐码",
+    "shortest": "最短码",
+    "longest": "最长码",
+}
 
 
 def dedupe_keep_order(values: Iterable[str]) -> tuple[str, ...]:
@@ -187,19 +197,31 @@ class WubiRepository:
         self._example_cache[key] = ""
         return ""
 
-    def query(self, text: str) -> QueryResult | None:
+    def _select_main_code(self, codes: tuple[str, ...], code_mode: str) -> str:
+        if code_mode == "longest":
+            max_length = max(len(code) for code in codes)
+            return next(code for code in codes if len(code) == max_length)
+        if code_mode == "shortest":
+            min_length = min(len(code) for code in codes)
+            return next(code for code in codes if len(code) == min_length)
+        return codes[0]
+
+    def query(self, text: str, code_mode: str = "preferred") -> QueryResult | None:
         normalized = text.strip()
         if not normalized:
             return None
 
         exact_codes = self._query_exact_codes(normalized)
         if exact_codes:
+            main_code = self._select_main_code(exact_codes, code_mode)
+            mode_label = CODE_MODE_LABELS.get(code_mode, CODE_MODE_LABELS["preferred"])
             return QueryResult(
                 text=normalized,
-                main_code=exact_codes[0],
+                main_code=main_code,
                 all_codes=exact_codes,
                 mode="exact",
-                note="词库精确命中，主显示推荐码；其余编码列为可用备选。",
+                code_mode=code_mode,
+                note=f"词库精确命中，当前按“{mode_label}”显示主编码；其余编码列为可用备选。",
             )
 
         derived_code = self._derive_phrase_code(normalized)
@@ -209,6 +231,7 @@ class WubiRepository:
                 main_code=derived_code,
                 all_codes=(derived_code,),
                 mode="derived",
+                code_mode=code_mode,
                 note="词库未命中，结果按五笔词组规则由单字全码推导。",
             )
 
@@ -347,8 +370,9 @@ class KeyCard(ttk.Frame):
 
 
 class WubiApp:
-    def __init__(self, repository: WubiRepository, topmost: bool = True) -> None:
+    def __init__(self, repository: WubiRepository, topmost: bool = True, code_mode: str = "longest") -> None:
         self.repository = repository
+        self.code_mode = code_mode
         self.root = tk.Tk()
         self.root.title("五笔字词查询")
         self.root.configure(bg="#faf7f2")
@@ -365,7 +389,8 @@ class WubiApp:
         self.query_var = tk.StringVar()
         self.code_var = tk.StringVar(value="编码：-")
         self.alt_var = tk.StringVar(value="其他编码：-")
-        self.note_var = tk.StringVar(value="支持精确查词；未命中时自动按规则推导。")
+        default_mode_label = CODE_MODE_LABELS.get(self.code_mode, CODE_MODE_LABELS["longest"])
+        self.note_var = tk.StringVar(value=f"当前按“{default_mode_label}”显示；未命中时自动按规则推导。")
 
         self._build_style()
         self._build_ui()
@@ -430,7 +455,8 @@ class WubiApp:
         self.query_var.set("")
         self.code_var.set("编码：-")
         self.alt_var.set("其他编码：-")
-        self.note_var.set("支持精确查词；未命中时自动按规则推导。")
+        default_mode_label = CODE_MODE_LABELS.get(self.code_mode, CODE_MODE_LABELS["longest"])
+        self.note_var.set(f"当前按“{default_mode_label}”显示；未命中时自动按规则推导。")
         self.entry.focus_set()
         for card in self.cards:
             card.clear()
@@ -441,7 +467,7 @@ class WubiApp:
             self.clear()
             return
 
-        result = self.repository.query(text)
+        result = self.repository.query(text, code_mode=self.code_mode)
         if result is None:
             self.code_var.set("编码：未找到")
             self.alt_var.set("其他编码：-")
@@ -451,8 +477,8 @@ class WubiApp:
             return
 
         self.code_var.set(f"编码：{result.main_code}")
-        if len(result.all_codes) > 1:
-            self.alt_var.set(f"其他编码：{' / '.join(result.all_codes[1:])}")
+        if result.other_codes:
+            self.alt_var.set(f"其他编码：{' / '.join(result.other_codes)}")
         else:
             self.alt_var.set("其他编码：-")
         self.note_var.set(result.note)
@@ -471,9 +497,10 @@ def build_cli_result_text(result: QueryResult | None) -> str:
         return "未找到可用编码。"
     lines = [
         f"字词：{result.text}",
-        f"推荐编码：{result.main_code}",
+        f"主显示编码：{result.main_code}",
         f"所有编码：{' / '.join(result.all_codes)}",
         f"结果类型：{'精确匹配' if result.mode == 'exact' else '规则推导'}",
+        f"显示方式：{CODE_MODE_LABELS.get(result.code_mode, CODE_MODE_LABELS['preferred'])}",
         f"说明：{result.note}",
     ]
     return "\n".join(lines)
@@ -484,6 +511,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text", help="直接查询并在终端输出结果，不打开图形界面")
     parser.add_argument("--db", action="append", help="手动指定词库数据库路径，可传多次")
     parser.add_argument("--no-topmost", action="store_true", help="启动时取消窗口置顶")
+    parser.add_argument(
+        "--code-mode",
+        choices=tuple(CODE_MODE_LABELS),
+        default="longest",
+        help="编码显示方式：preferred=推荐码，shortest=最短码，longest=最长码",
+    )
     return parser.parse_args()
 
 
@@ -502,10 +535,10 @@ def main() -> None:
 
     try:
         if args.text:
-            print(build_cli_result_text(repository.query(args.text)))
+            print(build_cli_result_text(repository.query(args.text, code_mode=args.code_mode)))
             return
 
-        app = WubiApp(repository, topmost=not args.no_topmost)
+        app = WubiApp(repository, topmost=not args.no_topmost, code_mode=args.code_mode)
         app.run()
     finally:
         repository.close()

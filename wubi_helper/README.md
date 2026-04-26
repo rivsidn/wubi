@@ -5,6 +5,7 @@
 - 小窗口、默认置顶，方便随手切回来查字词编码；
 - 优先查询系统里的 `ibus-table` 五笔 86 词库；
 - 查到编码后，会把主编码拆成最多 4 张字根图片展示，优先读取 `wubi_pics/` 里的自定义图片；
+- 可以通过命令行参数切换显示推荐码、最短码、最长码，适合学习阶段看全码；
 - 如果词库里没有这个词，会按 `打字规则.md` 里的词组规则自动推导编码。
 
 ## 需求里还可以补充的点
@@ -26,11 +27,22 @@
 python3 wubi_helper.py
 ```
 
+默认会按“最长码”显示，方便练习全码。
+
+如果想切换显示方式，可以在启动时指定：
+
+```bash
+python3 wubi_helper.py --code-mode preferred
+python3 wubi_helper.py --code-mode shortest
+python3 wubi_helper.py --code-mode longest
+```
+
 如果只想在终端里查一次：
 
 ```bash
 python3 wubi_helper.py --text 中
 python3 wubi_helper.py --text 五笔编码
+python3 wubi_helper.py --text 中 --code-mode longest
 ```
 
 ## 快捷键
