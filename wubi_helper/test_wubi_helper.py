@@ -1,6 +1,6 @@
 import unittest
 
-from wubi_helper import WubiRepository
+from wubi_helper import WubiApp, WubiRepository
 
 
 class WubiRepositoryTest(unittest.TestCase):
@@ -48,6 +48,28 @@ class WubiRepositoryTest(unittest.TestCase):
         assert result is not None
         self.assertEqual(result.main_code, "ltif")
         self.assertEqual(result.mode, "exact")
+
+
+class WubiAppTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = WubiRepository()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.repository.close()
+
+    def test_non_exact_match_hides_codes_and_images(self) -> None:
+        app = WubiApp(self.repository, code_mode="longest")
+        try:
+            app.query_var.set("中根")
+            app.search()
+            self.assertEqual(app.code_var.get(), "编码：-")
+            self.assertEqual(app.alt_var.get(), "其他编码：-")
+            self.assertEqual(app.hit_var.get(), "命中结果：未命中")
+            self.assertTrue(all(not card.canvas.find_all() for card in app.cards))
+        finally:
+            app.root.destroy()
 
 
 if __name__ == "__main__":

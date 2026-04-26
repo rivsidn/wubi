@@ -389,8 +389,7 @@ class WubiApp:
         self.query_var = tk.StringVar()
         self.code_var = tk.StringVar(value="编码：-")
         self.alt_var = tk.StringVar(value="其他编码：-")
-        default_mode_label = CODE_MODE_LABELS.get(self.code_mode, CODE_MODE_LABELS["longest"])
-        self.note_var = tk.StringVar(value=f"当前按“{default_mode_label}”显示；未命中时自动按规则推导。")
+        self.hit_var = tk.StringVar(value="命中结果：-")
 
         self._build_style()
         self._build_ui()
@@ -432,7 +431,6 @@ class WubiApp:
 
         ttk.Label(result_panel, textvariable=self.code_var, style="Mono.TLabel").pack(anchor="w")
         ttk.Label(result_panel, textvariable=self.alt_var, style="Body.TLabel").pack(anchor="w", pady=(0, 4))
-        ttk.Label(result_panel, textvariable=self.note_var, style="Body.TLabel", wraplength=536, justify="left").pack(anchor="w")
 
         card_panel = ttk.Frame(container, style="App.TFrame")
         card_panel.pack(fill="x", pady=(14, 8))
@@ -440,6 +438,8 @@ class WubiApp:
         self.cards = [KeyCard(card_panel, self.repository) for _ in range(4)]
         for card in self.cards:
             card.pack(side="left", padx=(0, 10))
+
+        ttk.Label(container, textvariable=self.hit_var, style="Status.TLabel").pack(anchor="w", pady=(2, 0))
 
     def _bind_events(self) -> None:
         self.root.bind("<Return>", lambda _event: self.search())
@@ -455,8 +455,7 @@ class WubiApp:
         self.query_var.set("")
         self.code_var.set("编码：-")
         self.alt_var.set("其他编码：-")
-        default_mode_label = CODE_MODE_LABELS.get(self.code_mode, CODE_MODE_LABELS["longest"])
-        self.note_var.set(f"当前按“{default_mode_label}”显示；未命中时自动按规则推导。")
+        self.hit_var.set("命中结果：-")
         self.entry.focus_set()
         for card in self.cards:
             card.clear()
@@ -468,12 +467,13 @@ class WubiApp:
             return
 
         result = self.repository.query(text, code_mode=self.code_mode)
-        if result is None:
-            self.code_var.set("编码：未找到")
+        for card in self.cards:
+            card.clear()
+
+        if result is None or result.mode != "exact":
+            self.code_var.set("编码：-")
             self.alt_var.set("其他编码：-")
-            self.note_var.set("词库和单字全码都未能提供结果，请确认输入内容或更换词库。")
-            for card in self.cards:
-                card.clear()
+            self.hit_var.set("命中结果：未命中")
             return
 
         self.code_var.set(f"编码：{result.main_code}")
@@ -481,10 +481,7 @@ class WubiApp:
             self.alt_var.set(f"其他编码：{' / '.join(result.other_codes)}")
         else:
             self.alt_var.set("其他编码：-")
-        self.note_var.set(result.note)
-
-        for card in self.cards:
-            card.clear()
+        self.hit_var.set("命中结果：精确命中")
         for card, key in zip(self.cards, result.main_code[:4]):
             card.render(key)
 
