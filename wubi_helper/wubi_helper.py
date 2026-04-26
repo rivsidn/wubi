@@ -18,6 +18,7 @@ from typing import Iterable
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
+from PIL import Image, ImageTk
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,8 @@ PRIMARY_DB_CANDIDATES = (
     Path("/usr/share/ibus-table/tables/wubi-jidian86.db"),
     Path("/usr/share/ibus-table/tables/wubi-haifeng86.db"),
 )
+
+KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
 
 
 def dedupe_keep_order(values: Iterable[str]) -> tuple[str, ...]:
@@ -216,6 +219,7 @@ class KeyCard(ttk.Frame):
     def __init__(self, master: tk.Misc, repository: WubiRepository) -> None:
         super().__init__(master, style="CardHost.TFrame")
         self.repository = repository
+        self.image_ref: ImageTk.PhotoImage | None = None
         self.canvas = tk.Canvas(
             self,
             width=126,
@@ -227,6 +231,11 @@ class KeyCard(ttk.Frame):
         self.canvas.pack()
 
     def render(self, key: str) -> None:
+        image_path = self._resolve_image_path(key)
+        if image_path is not None:
+            self._draw_image(image_path)
+            return
+
         meta = KEY_METAS.get(key)
         if meta is None:
             self._draw_missing(key)
@@ -260,9 +269,11 @@ class KeyCard(ttk.Frame):
 
     def clear(self) -> None:
         self.canvas.delete("all")
+        self.image_ref = None
 
     def _draw_missing(self, key: str) -> None:
         self.canvas.delete("all")
+        self.image_ref = None
         self._draw_rounded_rect(4, 4, 122, 122, 18, fill="#eadfd6", outline="#2f2f2f")
         self.canvas.create_text(
             63,
@@ -278,6 +289,22 @@ class KeyCard(ttk.Frame):
             fill="#6b4b3b",
             font=("Noto Sans CJK SC", 14),
         )
+
+    def _draw_image(self, image_path: Path) -> None:
+        self.canvas.delete("all")
+        with Image.open(image_path) as source:
+            image = source.copy()
+
+        image.thumbnail((118, 118))
+        self.image_ref = ImageTk.PhotoImage(image)
+        self.canvas.create_image(63, 63, image=self.image_ref, anchor="center")
+
+    def _resolve_image_path(self, key: str) -> Path | None:
+        for suffix in (".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"):
+            path = KEY_IMAGE_DIR / f"{key.upper()}{suffix}"
+            if path.exists():
+                return path
+        return None
 
     def _draw_rounded_rect(
         self,
@@ -329,18 +356,16 @@ class WubiApp:
         self.root.attributes("-topmost", topmost)
 
         width = 600
-        height = 430
+        height = 376
         screen_width = self.root.winfo_screenwidth()
         x = max(screen_width - width - 36, 24)
         self.root.geometry(f"{width}x{height}+{x}+48")
 
         self.topmost_var = tk.BooleanVar(value=topmost)
         self.query_var = tk.StringVar()
-        self.word_var = tk.StringVar(value="请输入想查询的字或词")
         self.code_var = tk.StringVar(value="编码：-")
         self.alt_var = tk.StringVar(value="其他编码：-")
         self.note_var = tk.StringVar(value="支持精确查词；未命中时自动按规则推导。")
-        self.status_var = tk.StringVar(value=f"词库：{self.repository.source_summary}")
 
         self._build_style()
         self._build_ui()
@@ -366,18 +391,8 @@ class WubiApp:
         container = ttk.Frame(self.root, style="App.TFrame", padding=16)
         container.pack(fill="both", expand=True)
 
-        header = ttk.Frame(container, style="App.TFrame")
-        header.pack(fill="x")
-        ttk.Label(header, text="五笔字词查询", style="Heading.TLabel").pack(side="left")
-        ttk.Checkbutton(
-            header,
-            text="窗口置顶",
-            variable=self.topmost_var,
-            command=self._toggle_topmost,
-        ).pack(side="right")
-
         query_panel = ttk.Frame(container, style="Panel.TFrame", padding=14)
-        query_panel.pack(fill="x", pady=(12, 10))
+        query_panel.pack(fill="x", pady=(0, 10))
 
         entry = ttk.Entry(query_panel, textvariable=self.query_var, font=("Noto Sans CJK SC", 16))
         entry.pack(side="left", fill="x", expand=True)
@@ -390,8 +405,7 @@ class WubiApp:
         result_panel = ttk.Frame(container, style="Panel.TFrame", padding=14)
         result_panel.pack(fill="x")
 
-        ttk.Label(result_panel, textvariable=self.word_var, background="#ffffff", foreground="#202020", font=("Noto Sans CJK SC", 20, "bold")).pack(anchor="w")
-        ttk.Label(result_panel, textvariable=self.code_var, style="Mono.TLabel").pack(anchor="w", pady=(10, 2))
+        ttk.Label(result_panel, textvariable=self.code_var, style="Mono.TLabel").pack(anchor="w")
         ttk.Label(result_panel, textvariable=self.alt_var, style="Body.TLabel").pack(anchor="w", pady=(0, 4))
         ttk.Label(result_panel, textvariable=self.note_var, style="Body.TLabel", wraplength=536, justify="left").pack(anchor="w")
 
@@ -402,26 +416,21 @@ class WubiApp:
         for card in self.cards:
             card.pack(side="left", padx=(0, 10))
 
-        footer = ttk.Frame(container, style="App.TFrame")
-        footer.pack(fill="x", side="bottom")
-        ttk.Label(footer, text="快捷键：Enter 查询，Esc 清空，Ctrl+L 聚焦输入框。", style="Status.TLabel").pack(anchor="w")
-        ttk.Label(footer, textvariable=self.status_var, style="Status.TLabel").pack(anchor="w", pady=(4, 0))
-
     def _bind_events(self) -> None:
         self.root.bind("<Return>", lambda _event: self.search())
         self.root.bind("<Escape>", lambda _event: self.clear())
         self.root.bind("<Control-l>", lambda _event: self.entry.focus_set())
+        self.root.bind("<Control-t>", lambda _event: self._toggle_topmost())
 
     def _toggle_topmost(self) -> None:
+        self.topmost_var.set(not self.topmost_var.get())
         self.root.attributes("-topmost", self.topmost_var.get())
 
     def clear(self) -> None:
         self.query_var.set("")
-        self.word_var.set("请输入想查询的字或词")
         self.code_var.set("编码：-")
         self.alt_var.set("其他编码：-")
         self.note_var.set("支持精确查词；未命中时自动按规则推导。")
-        self.status_var.set(f"词库：{self.repository.source_summary}")
         self.entry.focus_set()
         for card in self.cards:
             card.clear()
@@ -434,24 +443,19 @@ class WubiApp:
 
         result = self.repository.query(text)
         if result is None:
-            self.word_var.set(text)
             self.code_var.set("编码：未找到")
             self.alt_var.set("其他编码：-")
             self.note_var.set("词库和单字全码都未能提供结果，请确认输入内容或更换词库。")
-            self.status_var.set(f"词库：{self.repository.source_summary}")
             for card in self.cards:
                 card.clear()
             return
 
-        self.word_var.set(result.text)
         self.code_var.set(f"编码：{result.main_code}")
         if len(result.all_codes) > 1:
             self.alt_var.set(f"其他编码：{' / '.join(result.all_codes[1:])}")
         else:
             self.alt_var.set("其他编码：-")
         self.note_var.set(result.note)
-        mode_text = "精确匹配" if result.mode == "exact" else "规则推导"
-        self.status_var.set(f"{mode_text} | 词库：{self.repository.source_summary}")
 
         for card in self.cards:
             card.clear()
