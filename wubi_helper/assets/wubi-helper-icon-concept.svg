@@ -14,8 +14,7 @@
       .root { font-family: "Noto Serif CJK SC", "Noto Serif CJK", serif; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
       .root-g { fill: #8a4f17; }
       .root-t { fill: #4f5b86; }
-      .root-r { fill: #226a7c; }
-      .root-d { fill: #844a34; }
+      .root-x { fill: #844a34; }
       .root-c { fill: #5d6840; }
       .code { font-family: "Noto Sans CJK SC", "Noto Sans", sans-serif; font-weight: 700; fill: rgba(42,83,74,.82); }
       .key { stroke: #193837; stroke-width: 4; filter: url(#keyShadow); }
@@ -27,32 +26,25 @@
   <path d="M128 66v364M256 66v364M384 66v364M76 154h360M76 258h360M76 362h360" stroke="rgba(248,236,198,.10)" stroke-width="2"/>
 
   <g>
-    <rect class="key" x="82" y="92" width="128" height="128" rx="30" fill="#f6dab3"/>
-    <rect class="shine" x="90" y="100" width="112" height="112" rx="20"/>
-    <text class="root root-g" x="146" y="152" font-size="78">五</text>
-    <text class="code" x="174" y="194" font-size="24">G</text>
+    <rect class="key" x="54" y="78" width="180" height="180" rx="40" fill="#f6dab3"/>
+    <rect class="shine" x="65" y="89" width="158" height="158" rx="30"/>
+    <text class="root root-g" x="144" y="162" font-size="126">五</text>
+    <text class="code" x="202" y="232" font-size="26">G</text>
   </g>
   <g>
-    <rect class="key" x="302" y="92" width="128" height="128" rx="30" fill="#cee6aa"/>
-    <rect class="shine" x="310" y="100" width="112" height="112" rx="20"/>
-    <text class="root root-t" x="366" y="152" font-size="78">⺮</text>
-    <text class="code" x="394" y="194" font-size="24">T</text>
-  </g>
-  <g>
-    <rect class="key" x="192" y="200" width="128" height="128" rx="30" fill="#c6e5ef"/>
-    <rect class="shine" x="200" y="208" width="112" height="112" rx="20"/>
-    <text class="root root-r" x="256" y="256" font-size="86">龵</text>
-    <text class="code" x="284" y="302" font-size="24">R</text>
+    <rect class="key" x="278" y="78" width="180" height="180" rx="40" fill="#cee6aa"/>
+    <rect class="shine" x="289" y="89" width="158" height="158" rx="30"/>
+    <text class="root root-t" x="368" y="162" font-size="126">⺮</text>
+    <text class="code" x="426" y="232" font-size="26">T</text>
   </g>
 
-
   <g>
-    <rect class="key" x="82" y="338" width="348" height="104" rx="32" fill="#f2bca0"/>
-    <rect class="shine" x="90" y="346" width="332" height="88" rx="22"/>
-    <path d="M256 356v68" stroke="rgba(32,70,67,.30)" stroke-width="3"/>
-    <text class="root root-d" x="176" y="384" font-size="82">石</text>
-    <text class="root root-c" x="336" y="384" font-size="82">马</text>
-    <text class="code" x="218" y="418" font-size="18">D</text>
-    <text class="code" x="378" y="418" font-size="18">C</text>
+    <rect class="key" x="54" y="290" width="404" height="152" rx="40" fill="#f2bca0"/>
+    <rect class="shine" x="65" y="301" width="382" height="130" rx="30"/>
+    <path d="M256 308v116" stroke="rgba(32,70,67,.30)" stroke-width="3"/>
+    <text class="root root-x" x="158" y="362" font-size="136">纟</text>
+    <text class="root root-c" x="354" y="362" font-size="136">马</text>
+    <text class="code" x="222" y="412" font-size="22">X</text>
+    <text class="code" x="418" y="412" font-size="22">C</text>
   </g>
 </svg>
