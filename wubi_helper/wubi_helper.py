@@ -443,8 +443,9 @@ class WubiApp:
 
     def _bind_events(self) -> None:
         self.root.bind("<Return>", lambda _event: self.search())
-        self.root.bind("<Escape>", lambda _event: self.clear())
-        self.root.bind("<Control-l>", lambda _event: self.entry.focus_set())
+        self.root.bind("<Escape>", lambda _event: self.root.destroy())
+        self.root.bind("<Control-l>", lambda _event: self.clear())
+        self.root.bind("<Control-f>", lambda _event: self.entry.focus_set())
         self.root.bind("<Control-t>", lambda _event: self._toggle_topmost())
 
     def _toggle_topmost(self) -> None:

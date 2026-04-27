@@ -48,8 +48,9 @@ python3 wubi_helper.py --text 中 --code-mode longest
 ## 快捷键
 
 - `Enter`：查询
-- `Esc`：清空
-- `Ctrl+L`：把光标重新放回输入框
+- `Ctrl+L`：清空
+- `Ctrl+F`：把光标重新放回输入框
+- `Esc`：退出程序
 - `Ctrl+T`：切换窗口置顶
 
 ## 图片资源
