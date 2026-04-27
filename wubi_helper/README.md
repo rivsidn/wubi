@@ -45,6 +45,27 @@ python3 wubi_helper.py --text 五笔编码
 python3 wubi_helper.py --text 中 --code-mode longest
 ```
 
+## 安装和卸载
+
+安装到当前用户系统目录：
+
+```bash
+make install
+```
+
+安装后会创建：
+
+- 命令行入口：`~/.local/bin/wubi-helper`
+- 桌面应用入口：`~/.local/share/applications/wubi-helper.desktop`
+- 应用资源目录：`~/.local/share/wubi-helper/`
+- 多尺寸应用图标：`~/.local/share/icons/hicolor/*/apps/wubi-helper.png`
+
+卸载：
+
+```bash
+make uninstall
+```
+
 ## 快捷键
 
 - `Enter`：查询

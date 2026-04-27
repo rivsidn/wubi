@@ -87,6 +87,7 @@ PRIMARY_DB_CANDIDATES = (
 )
 
 KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
+APP_ICON_PATH = Path(__file__).resolve().parent / "assets/icons/wubi-helper-icon-256.png"
 CODE_MODE_LABELS = {
     "preferred": "推荐码",
     "shortest": "最短码",
@@ -378,6 +379,8 @@ class WubiApp:
         self.root.configure(bg="#faf7f2")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", topmost)
+        self.icon_ref: ImageTk.PhotoImage | None = None
+        self._set_window_icon()
 
         width = 600
         height = 376
@@ -394,6 +397,18 @@ class WubiApp:
         self._build_style()
         self._build_ui()
         self._bind_events()
+
+    def _set_window_icon(self) -> None:
+        if not APP_ICON_PATH.exists():
+            return
+
+        try:
+            with Image.open(APP_ICON_PATH) as source:
+                icon = source.copy()
+            self.icon_ref = ImageTk.PhotoImage(icon)
+            self.root.iconphoto(True, self.icon_ref)
+        except (OSError, tk.TclError):
+            self.icon_ref = None
 
     def _build_style(self) -> None:
         style = ttk.Style(self.root)
