@@ -88,6 +88,7 @@ PRIMARY_DB_CANDIDATES = (
 
 KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
 APP_ICON_PATH = Path(__file__).resolve().parent / "assets/icons/wubi-helper-icon-256.png"
+APP_WM_CLASS = "Wubi-helper"
 CODE_MODE_LABELS = {
     "preferred": "推荐码",
     "shortest": "最短码",
@@ -374,7 +375,7 @@ class WubiApp:
     def __init__(self, repository: WubiRepository, topmost: bool = True, code_mode: str = "longest") -> None:
         self.repository = repository
         self.code_mode = code_mode
-        self.root = tk.Tk()
+        self.root = tk.Tk(className=APP_WM_CLASS)
         self.root.title("五笔字词查询")
         self.root.configure(bg="#faf7f2")
         self.root.resizable(False, False)

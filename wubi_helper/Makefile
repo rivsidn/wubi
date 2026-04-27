@@ -1,4 +1,5 @@
 APP_ID := wubi-helper
+APP_WM_CLASS := Wubi-helper
 APP_NAME := 五笔查询助手
 PYTHON ?= python3
 PREFIX ?= $(HOME)/.local
@@ -66,6 +67,7 @@ install-desktop: install-app
 		'Exec=$(BINDIR)/$(APP_ID)' \
 		'Icon=$(APP_ID)' \
 		'Terminal=false' \
+		'StartupWMClass=$(APP_WM_CLASS)' \
 		'StartupNotify=true' \
 		'Categories=Utility;' \
 		'Keywords=五笔;Wubi;编码;字根;' > '$(DESKTOPDIR)/$(APP_ID).desktop'
