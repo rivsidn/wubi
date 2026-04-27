@@ -11,7 +11,12 @@
       <feDropShadow dx="5" dy="8" stdDeviation="5" flood-color="#041213" flood-opacity="0.36"/>
     </filter>
     <style>
-      .root { font-family: "Noto Serif CJK SC", "Noto Serif CJK", serif; font-weight: 700; fill: #1e312d; text-anchor: middle; dominant-baseline: central; }
+      .root { font-family: "Noto Serif CJK SC", "Noto Serif CJK", serif; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+      .root-g { fill: #8a4f17; }
+      .root-t { fill: #4f5b86; }
+      .root-r { fill: #226a7c; }
+      .root-d { fill: #844a34; }
+      .root-c { fill: #5d6840; }
       .code { font-family: "Noto Sans CJK SC", "Noto Sans", sans-serif; font-weight: 700; fill: rgba(42,83,74,.82); }
       .key { stroke: #193837; stroke-width: 4; filter: url(#keyShadow); }
       .shine { fill: none; stroke: rgba(255,255,255,.28); stroke-width: 2; }
@@ -24,20 +29,20 @@
   <g>
     <rect class="key" x="82" y="92" width="128" height="128" rx="30" fill="#f6dab3"/>
     <rect class="shine" x="90" y="100" width="112" height="112" rx="20"/>
-    <text class="root" x="146" y="152" font-size="72">口</text>
-    <text class="code" x="174" y="194" font-size="24">K</text>
+    <text class="root root-g" x="146" y="152" font-size="78">五</text>
+    <text class="code" x="174" y="194" font-size="24">G</text>
   </g>
   <g>
     <rect class="key" x="302" y="92" width="128" height="128" rx="30" fill="#cee6aa"/>
     <rect class="shine" x="310" y="100" width="112" height="112" rx="20"/>
-    <text class="root" x="366" y="152" font-size="72">木</text>
-    <text class="code" x="394" y="194" font-size="24">S</text>
+    <text class="root root-t" x="366" y="152" font-size="78">⺮</text>
+    <text class="code" x="394" y="194" font-size="24">T</text>
   </g>
   <g>
     <rect class="key" x="192" y="200" width="128" height="128" rx="30" fill="#c6e5ef"/>
     <rect class="shine" x="200" y="208" width="112" height="112" rx="20"/>
-    <text class="root" x="256" y="260" font-size="78">亻</text>
-    <text class="code" x="284" y="302" font-size="24">W</text>
+    <text class="root root-r" x="256" y="256" font-size="86">龵</text>
+    <text class="code" x="284" y="302" font-size="24">R</text>
   </g>
 
 
@@ -45,9 +50,9 @@
     <rect class="key" x="82" y="338" width="348" height="104" rx="32" fill="#f2bca0"/>
     <rect class="shine" x="90" y="346" width="332" height="88" rx="22"/>
     <path d="M256 356v68" stroke="rgba(32,70,67,.30)" stroke-width="3"/>
-    <text class="root" x="176" y="384" font-size="82">五</text>
-    <text class="root" x="336" y="384" font-size="82">⺮</text>
-    <text class="code" x="218" y="418" font-size="18">G</text>
-    <text class="code" x="378" y="418" font-size="18">T</text>
+    <text class="root root-d" x="176" y="384" font-size="82">石</text>
+    <text class="root root-c" x="336" y="384" font-size="82">马</text>
+    <text class="code" x="218" y="418" font-size="18">D</text>
+    <text class="code" x="378" y="418" font-size="18">C</text>
   </g>
 </svg>
