@@ -6,7 +6,7 @@ from wubi_helper import WubiApp, WubiRepository
 class WubiRepositoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.repository = WubiRepository()
+        cls.repository = WubiRepository(wubi_version="86")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -50,10 +50,46 @@ class WubiRepositoryTest(unittest.TestCase):
         self.assertEqual(result.mode, "exact")
 
 
+class Wubi98RepositoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = WubiRepository(wubi_version="98")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.repository.close()
+
+    def test_default_version_supports_xian_wubi98_code(self) -> None:
+        default_repository = WubiRepository()
+        try:
+            result = default_repository.query("显", code_mode="longest")
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.wubi_version, "98")
+            self.assertEqual(result.main_code, "jof")
+            self.assertEqual(result.all_codes, ("jo", "jof"))
+        finally:
+            default_repository.close()
+
+    def test_wubi98_prefers_short_code(self) -> None:
+        result = self.repository.query("显")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.main_code, "jo")
+        self.assertEqual(result.mode, "exact")
+
+    def test_wubi98_can_use_full_code(self) -> None:
+        result = self.repository.query("显", code_mode="longest")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.main_code, "jof")
+        self.assertEqual(result.code_mode, "longest")
+
+
 class WubiAppTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.repository = WubiRepository()
+        cls.repository = WubiRepository(wubi_version="86")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -66,7 +102,7 @@ class WubiAppTest(unittest.TestCase):
             app.search()
             self.assertEqual(app.code_var.get(), "编码：-")
             self.assertEqual(app.alt_var.get(), "其他编码：-")
-            self.assertEqual(app.hit_var.get(), "命中结果：未命中")
+            self.assertEqual(app.hit_var.get(), "命中结果：86 版未命中")
             self.assertTrue(all(not card.canvas.find_all() for card in app.cards))
         finally:
             app.root.destroy()

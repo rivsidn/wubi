@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """五笔编码查询图形工具.
 
-默认读取 ibus-table 的 `wubi-jidian86` 词库：
+默认读取内置 98 五笔单字表：
+- 98 版可查询单字编码，并可按单字全码推导词组编码；
+- 86 版仍可通过 `--wubi-version 86` 读取 ibus-table 的 `wubi-jidian86` 词库；
 - 精确命中词库时，显示推荐编码和其他可用编码；
 - 词库未命中时，按 `打字规则.md` 中的词组规则推导编码；
 - 结果以字根卡片形式展示主编码对应的按键信息。
@@ -34,6 +36,7 @@ class QueryResult:
     main_code: str
     all_codes: tuple[str, ...]
     mode: str
+    wubi_version: str
     code_mode: str
     note: str
 
@@ -80,11 +83,30 @@ ZONE_COLORS = {
     5: "#f6edab",
 }
 
-PRIMARY_DB_CANDIDATES = (
-    Path.home() / ".local/share/ibus-table/tables/wubi-jidian86-user.db",
-    Path("/usr/share/ibus-table/tables/wubi-jidian86.db"),
-    Path("/usr/share/ibus-table/tables/wubi-haifeng86.db"),
-)
+DEFAULT_WUBI_VERSION = "98"
+WUBI_VERSION_LABELS = {
+    "98": "98 版",
+    "86": "86 版",
+}
+
+DB_CANDIDATES = {
+    "86": (
+        Path.home() / ".local/share/ibus-table/tables/wubi-jidian86-user.db",
+        Path("/usr/share/ibus-table/tables/wubi-jidian86.db"),
+        Path("/usr/share/ibus-table/tables/wubi-haifeng86.db"),
+    ),
+    "98": (
+        Path.home() / ".local/share/ibus-table/tables/wubi98-user.db",
+        Path.home() / ".local/share/ibus-table/tables/wubi-jidian98-user.db",
+        Path("/usr/share/ibus-table/tables/wubi98.db"),
+        Path("/usr/share/ibus-table/tables/wubi-jidian98.db"),
+        Path("/usr/share/ibus-table/tables/wubi-haifeng98.db"),
+    ),
+}
+
+BUILTIN_CODE_TABLES = {
+    "98": Path(__file__).resolve().parent / "assets/wubi98-single.tsv",
+}
 
 KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
 APP_ICON_PATH = Path(__file__).resolve().parent / "assets/icons/wubi-helper-icon-256.png"
@@ -107,23 +129,76 @@ def dedupe_keep_order(values: Iterable[str]) -> tuple[str, ...]:
 
 
 class WubiRepository:
-    def __init__(self, db_paths: Iterable[Path] | None = None) -> None:
-        candidates = tuple(db_paths or PRIMARY_DB_CANDIDATES)
+    def __init__(self, db_paths: Iterable[Path] | None = None, wubi_version: str = DEFAULT_WUBI_VERSION) -> None:
+        if wubi_version not in WUBI_VERSION_LABELS:
+            supported = " / ".join(WUBI_VERSION_LABELS)
+            raise ValueError(f"不支持的五笔版本：{wubi_version}，可选：{supported}")
+
+        self.wubi_version = wubi_version
+        candidates = tuple(db_paths or DB_CANDIDATES[wubi_version])
+        self._builtin_codes = self._load_builtin_codes(BUILTIN_CODE_TABLES.get(wubi_version))
+        self._builtin_full_codes = {
+            text: max(codes, key=len)
+            for text, codes in self._builtin_codes.items()
+            if len(text) == 1
+        }
+        self._builtin_examples_by_key = self._build_builtin_examples(self._builtin_codes)
         self.db_paths = tuple(path for path in candidates if path.exists())
         self._connections = [sqlite3.connect(path) for path in self.db_paths]
-        if not self._connections:
-            raise FileNotFoundError("未找到可用的五笔词库数据库。")
+        if not self._connections and not self._builtin_codes:
+            version_label = WUBI_VERSION_LABELS[wubi_version]
+            raise FileNotFoundError(f"未找到可用的{version_label}五笔词库数据库或内置码表。")
         self._example_cache: dict[str, str] = {}
 
     @property
     def source_summary(self) -> str:
-        return " / ".join(path.name for path in self.db_paths)
+        sources = [path.name for path in self.db_paths]
+        if self._builtin_codes:
+            sources.append(f"{WUBI_VERSION_LABELS[self.wubi_version]}内置单字表")
+        return " / ".join(sources)
+
+    def _load_builtin_codes(self, path: Path | None) -> dict[str, tuple[str, ...]]:
+        if path is None or not path.exists():
+            return {}
+
+        code_map: dict[str, list[str]] = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+
+            try:
+                text, code = stripped.split("\t", 1)
+            except ValueError:
+                continue
+
+            code = code.strip().lower()
+            text = text.strip()
+            if not text or not code or not code.isalpha():
+                continue
+            code_map.setdefault(text, []).append(code)
+
+        return {
+            text: tuple(sorted(dedupe_keep_order(codes), key=lambda item: (len(item), item)))
+            for text, codes in code_map.items()
+        }
+
+    def _build_builtin_examples(self, code_map: dict[str, tuple[str, ...]]) -> dict[str, str]:
+        examples: dict[str, str] = {}
+        for text, codes in code_map.items():
+            if len(text) != 1:
+                continue
+            for code in codes:
+                if len(code) == 1 and code not in examples:
+                    examples[code] = text
+        return examples
 
     def close(self) -> None:
         for connection in self._connections:
             connection.close()
 
     def _query_exact_codes(self, text: str) -> tuple[str, ...]:
+        builtin_codes = list(self._builtin_codes.get(text, ()))
         rows: list[tuple[str, int, int, int]] = []
         for priority, connection in enumerate(self._connections):
             cursor = connection.execute(
@@ -135,12 +210,16 @@ class WubiRepository:
                 (text,),
             )
             for tabkeys, freq, user_freq in cursor.fetchall():
-                rows.append((tabkeys, len(tabkeys), priority, -(user_freq + freq)))
+                code = str(tabkeys).lower()
+                rows.append((code, len(code), priority, -(user_freq + freq)))
 
         rows.sort(key=lambda item: (item[1], item[2], item[3], item[0]))
-        return dedupe_keep_order(row[0] for row in rows)
+        return dedupe_keep_order((*builtin_codes, *(row[0] for row in rows)))
 
     def _query_full_char_code(self, char: str) -> str | None:
+        if char in self._builtin_full_codes:
+            return self._builtin_full_codes[char]
+
         for connection in self._connections:
             try:
                 row = connection.execute(
@@ -179,6 +258,10 @@ class WubiRepository:
         if key == "z":
             self._example_cache[key] = ""
             return ""
+
+        if key in self._builtin_examples_by_key:
+            self._example_cache[key] = self._builtin_examples_by_key[key]
+            return self._example_cache[key]
 
         for connection in self._connections:
             cursor = connection.execute(
@@ -222,8 +305,9 @@ class WubiRepository:
                 main_code=main_code,
                 all_codes=exact_codes,
                 mode="exact",
+                wubi_version=self.wubi_version,
                 code_mode=code_mode,
-                note=f"词库精确命中，当前按“{mode_label}”显示主编码；其余编码列为可用备选。",
+                note=f"{WUBI_VERSION_LABELS[self.wubi_version]}词库精确命中，当前按“{mode_label}”显示主编码；其余编码列为可用备选。",
             )
 
         derived_code = self._derive_phrase_code(normalized)
@@ -233,8 +317,9 @@ class WubiRepository:
                 main_code=derived_code,
                 all_codes=(derived_code,),
                 mode="derived",
+                wubi_version=self.wubi_version,
                 code_mode=code_mode,
-                note="词库未命中，结果按五笔词组规则由单字全码推导。",
+                note=f"{WUBI_VERSION_LABELS[self.wubi_version]}词库未命中，结果按五笔词组规则由单字全码推导。",
             )
 
         return None
@@ -325,10 +410,15 @@ class KeyCard(ttk.Frame):
         self.canvas.create_image(63, 63, image=self.image_ref, anchor="center")
 
     def _resolve_image_path(self, key: str) -> Path | None:
-        for suffix in (".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"):
-            path = KEY_IMAGE_DIR / f"{key.upper()}{suffix}"
-            if path.exists():
-                return path
+        candidate_dirs = (
+            KEY_IMAGE_DIR / f"{self.repository.wubi_version}wubi",
+            KEY_IMAGE_DIR,
+        )
+        for directory in candidate_dirs:
+            for suffix in (".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"):
+                path = directory / f"{key.upper()}{suffix}"
+                if path.exists():
+                    return path
         return None
 
     def _draw_rounded_rect(
@@ -376,7 +466,7 @@ class WubiApp:
         self.repository = repository
         self.code_mode = code_mode
         self.root = tk.Tk(className=APP_WM_CLASS)
-        self.root.title("五笔字词查询")
+        self.root.title(f"五笔字词查询（{WUBI_VERSION_LABELS[repository.wubi_version]}）")
         self.root.configure(bg="#faf7f2")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", topmost)
@@ -393,7 +483,7 @@ class WubiApp:
         self.query_var = tk.StringVar()
         self.code_var = tk.StringVar(value="编码：-")
         self.alt_var = tk.StringVar(value="其他编码：-")
-        self.hit_var = tk.StringVar(value="命中结果：-")
+        self.hit_var = tk.StringVar(value=f"命中结果：-（{WUBI_VERSION_LABELS[repository.wubi_version]}）")
 
         self._build_style()
         self._build_ui()
@@ -472,7 +562,7 @@ class WubiApp:
         self.query_var.set("")
         self.code_var.set("编码：-")
         self.alt_var.set("其他编码：-")
-        self.hit_var.set("命中结果：-")
+        self.hit_var.set(f"命中结果：-（{WUBI_VERSION_LABELS[self.repository.wubi_version]}）")
         self.entry.focus_set()
         for card in self.cards:
             card.clear()
@@ -490,7 +580,7 @@ class WubiApp:
         if result is None or result.mode != "exact":
             self.code_var.set("编码：-")
             self.alt_var.set("其他编码：-")
-            self.hit_var.set("命中结果：未命中")
+            self.hit_var.set(f"命中结果：{WUBI_VERSION_LABELS[self.repository.wubi_version]}未命中")
             return
 
         self.code_var.set(f"编码：{result.main_code}")
@@ -498,7 +588,7 @@ class WubiApp:
             self.alt_var.set(f"其他编码：{' / '.join(result.other_codes)}")
         else:
             self.alt_var.set("其他编码：-")
-        self.hit_var.set("命中结果：精确命中")
+        self.hit_var.set(f"命中结果：{WUBI_VERSION_LABELS[self.repository.wubi_version]}精确命中")
         for card, key in zip(self.cards, result.main_code[:4]):
             card.render(key)
 
@@ -511,6 +601,7 @@ def build_cli_result_text(result: QueryResult | None) -> str:
         return "未找到可用编码。"
     lines = [
         f"字词：{result.text}",
+        f"五笔版本：{WUBI_VERSION_LABELS.get(result.wubi_version, result.wubi_version)}",
         f"主显示编码：{result.main_code}",
         f"所有编码：{' / '.join(result.all_codes)}",
         f"结果类型：{'精确匹配' if result.mode == 'exact' else '规则推导'}",
@@ -526,6 +617,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", action="append", help="手动指定词库数据库路径，可传多次")
     parser.add_argument("--no-topmost", action="store_true", help="启动时取消窗口置顶")
     parser.add_argument(
+        "--wubi-version",
+        choices=tuple(WUBI_VERSION_LABELS),
+        default=DEFAULT_WUBI_VERSION,
+        help="五笔版本：98=98 版（默认，使用内置单字表），86=86 版（读取 ibus-table 词库）",
+    )
+    parser.add_argument(
         "--code-mode",
         choices=tuple(CODE_MODE_LABELS),
         default="longest",
@@ -539,7 +636,7 @@ def main() -> None:
     db_paths = tuple(Path(path) for path in args.db) if args.db else None
 
     try:
-        repository = WubiRepository(db_paths)
+        repository = WubiRepository(db_paths, wubi_version=args.wubi_version)
     except FileNotFoundError as exc:
         if args.text:
             print(str(exc))
