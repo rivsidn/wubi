@@ -59,17 +59,13 @@ class Wubi98RepositoryTest(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.repository.close()
 
-    def test_default_version_supports_xian_wubi98_code(self) -> None:
-        default_repository = WubiRepository()
-        try:
-            result = default_repository.query("显", code_mode="longest")
-            self.assertIsNotNone(result)
-            assert result is not None
-            self.assertEqual(result.wubi_version, "98")
-            self.assertEqual(result.main_code, "jof")
-            self.assertEqual(result.all_codes, ("jo", "jof"))
-        finally:
-            default_repository.close()
+    def test_wubi98_supports_xian_code(self) -> None:
+        result = self.repository.query("显", code_mode="longest")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.wubi_version, "98")
+        self.assertEqual(result.main_code, "jof")
+        self.assertEqual(result.all_codes, ("jo", "jof"))
 
     def test_wubi98_prefers_short_code(self) -> None:
         result = self.repository.query("显")
@@ -84,6 +80,48 @@ class Wubi98RepositoryTest(unittest.TestCase):
         assert result is not None
         self.assertEqual(result.main_code, "jof")
         self.assertEqual(result.code_mode, "longest")
+
+
+class WubiXinshijiRepositoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = WubiRepository(wubi_version="xinshiji")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.repository.close()
+
+    def test_xinshiji_version_supports_xian_code(self) -> None:
+        result = self.repository.query("显", code_mode="longest")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.wubi_version, "xinshiji")
+        self.assertEqual(result.main_code, "jogf")
+        self.assertEqual(result.all_codes, ("jo", "jog", "jogf"))
+
+    def test_default_version_is_xinshiji(self) -> None:
+        default_repository = WubiRepository()
+        try:
+            result = default_repository.query("显", code_mode="longest")
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.wubi_version, "xinshiji")
+            self.assertEqual(result.main_code, "jogf")
+            self.assertEqual(result.all_codes, ("jo", "jog", "jogf"))
+        finally:
+            default_repository.close()
+
+    def test_xinshiji_alias_06_can_be_used(self) -> None:
+        alias_repository = WubiRepository(wubi_version="06")
+        try:
+            result = alias_repository.query("输入法")
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.wubi_version, "xinshiji")
+            self.assertEqual(result.main_code, "ltif")
+            self.assertEqual(result.mode, "exact")
+        finally:
+            alias_repository.close()
 
 
 class WubiAppTest(unittest.TestCase):

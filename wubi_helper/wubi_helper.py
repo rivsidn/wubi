@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """五笔编码查询图形工具.
 
-默认读取内置 98 五笔单字表：
-- 98 版可查询单字编码，并可按单字全码推导词组编码；
-- 86 版仍可通过 `--wubi-version 86` 读取 ibus-table 的 `wubi-jidian86` 词库；
+默认读取内置新世纪五笔码表：
+- 支持 98 版、86 版、新世纪版五笔；
+- 98 版和新世纪版内置码表，86 版仍可读取 ibus-table 词库；
 - 精确命中词库时，显示推荐编码和其他可用编码；
 - 词库未命中时，按 `打字规则.md` 中的词组规则推导编码；
 - 结果以字根卡片形式展示主编码对应的按键信息。
@@ -83,10 +83,19 @@ ZONE_COLORS = {
     5: "#f6edab",
 }
 
-DEFAULT_WUBI_VERSION = "98"
+DEFAULT_WUBI_VERSION = "xinshiji"
 WUBI_VERSION_LABELS = {
     "98": "98 版",
     "86": "86 版",
+    "xinshiji": "新世纪版",
+}
+WUBI_VERSION_ALIASES = {
+    "98": "98",
+    "86": "86",
+    "06": "xinshiji",
+    "xinshiji": "xinshiji",
+    "new-century": "xinshiji",
+    "新世纪": "xinshiji",
 }
 
 DB_CANDIDATES = {
@@ -102,10 +111,24 @@ DB_CANDIDATES = {
         Path("/usr/share/ibus-table/tables/wubi-jidian98.db"),
         Path("/usr/share/ibus-table/tables/wubi-haifeng98.db"),
     ),
+    "xinshiji": (
+        Path.home() / ".local/share/ibus-table/tables/wubi06-user.db",
+        Path.home() / ".local/share/ibus-table/tables/wubi-xinshiji-user.db",
+        Path("/usr/share/ibus-table/tables/wubi06.db"),
+        Path("/usr/share/ibus-table/tables/wubi-xinshiji.db"),
+        Path("/usr/share/ibus-table/tables/wubi-xinshiji86.db"),
+    ),
 }
 
 BUILTIN_CODE_TABLES = {
     "98": Path(__file__).resolve().parent / "assets/wubi98-single.tsv",
+    "xinshiji": Path(__file__).resolve().parent / "assets/wubi06.tsv",
+}
+
+KEY_IMAGE_SUBDIRS = {
+    "86": ("86wubi",),
+    "98": ("98wubi",),
+    "xinshiji": ("xinshiji_wubi", "06wubi"),
 }
 
 KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
@@ -128,15 +151,19 @@ def dedupe_keep_order(values: Iterable[str]) -> tuple[str, ...]:
     return tuple(ordered)
 
 
+def normalize_wubi_version(wubi_version: str) -> str:
+    normalized = WUBI_VERSION_ALIASES.get(wubi_version.strip().lower())
+    if normalized is None:
+        supported = " / ".join(WUBI_VERSION_ALIASES)
+        raise ValueError(f"不支持的五笔版本：{wubi_version}，可选：{supported}")
+    return normalized
+
+
 class WubiRepository:
     def __init__(self, db_paths: Iterable[Path] | None = None, wubi_version: str = DEFAULT_WUBI_VERSION) -> None:
-        if wubi_version not in WUBI_VERSION_LABELS:
-            supported = " / ".join(WUBI_VERSION_LABELS)
-            raise ValueError(f"不支持的五笔版本：{wubi_version}，可选：{supported}")
-
-        self.wubi_version = wubi_version
-        candidates = tuple(db_paths or DB_CANDIDATES[wubi_version])
-        self._builtin_codes = self._load_builtin_codes(BUILTIN_CODE_TABLES.get(wubi_version))
+        self.wubi_version = normalize_wubi_version(wubi_version)
+        candidates = tuple(db_paths or DB_CANDIDATES[self.wubi_version])
+        self._builtin_codes = self._load_builtin_codes(BUILTIN_CODE_TABLES.get(self.wubi_version))
         self._builtin_full_codes = {
             text: max(codes, key=len)
             for text, codes in self._builtin_codes.items()
@@ -146,7 +173,7 @@ class WubiRepository:
         self.db_paths = tuple(path for path in candidates if path.exists())
         self._connections = [sqlite3.connect(path) for path in self.db_paths]
         if not self._connections and not self._builtin_codes:
-            version_label = WUBI_VERSION_LABELS[wubi_version]
+            version_label = WUBI_VERSION_LABELS[self.wubi_version]
             raise FileNotFoundError(f"未找到可用的{version_label}五笔词库数据库或内置码表。")
         self._example_cache: dict[str, str] = {}
 
@@ -154,7 +181,7 @@ class WubiRepository:
     def source_summary(self) -> str:
         sources = [path.name for path in self.db_paths]
         if self._builtin_codes:
-            sources.append(f"{WUBI_VERSION_LABELS[self.wubi_version]}内置单字表")
+            sources.append(f"{WUBI_VERSION_LABELS[self.wubi_version]}内置码表")
         return " / ".join(sources)
 
     def _load_builtin_codes(self, path: Path | None) -> dict[str, tuple[str, ...]]:
@@ -410,10 +437,13 @@ class KeyCard(ttk.Frame):
         self.canvas.create_image(63, 63, image=self.image_ref, anchor="center")
 
     def _resolve_image_path(self, key: str) -> Path | None:
-        candidate_dirs = (
-            KEY_IMAGE_DIR / f"{self.repository.wubi_version}wubi",
-            KEY_IMAGE_DIR,
-        )
+        candidate_dirs = tuple(
+            KEY_IMAGE_DIR / subdir
+            for subdir in KEY_IMAGE_SUBDIRS.get(
+                self.repository.wubi_version,
+                (f"{self.repository.wubi_version}wubi",),
+            )
+        ) + (KEY_IMAGE_DIR,)
         for directory in candidate_dirs:
             for suffix in (".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"):
                 path = directory / f"{key.upper()}{suffix}"
@@ -618,9 +648,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-topmost", action="store_true", help="启动时取消窗口置顶")
     parser.add_argument(
         "--wubi-version",
-        choices=tuple(WUBI_VERSION_LABELS),
+        metavar="VERSION",
         default=DEFAULT_WUBI_VERSION,
-        help="五笔版本：98=98 版（默认，使用内置单字表），86=86 版（读取 ibus-table 词库）",
+        help="五笔版本：xinshiji/06=新世纪版（默认），98=98 版，86=86 版",
     )
     parser.add_argument(
         "--code-mode",
@@ -637,7 +667,7 @@ def main() -> None:
 
     try:
         repository = WubiRepository(db_paths, wubi_version=args.wubi_version)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         if args.text:
             print(str(exc))
             return
