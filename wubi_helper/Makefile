@@ -1,6 +1,6 @@
 APP_ID := wubi-helper
 APP_WM_CLASS := Wubi-helper
-APP_NAME := Wubi Helper
+APP_NAME := Tiger Wubi Helper
 PYTHON ?= python3
 PREFIX ?= $(HOME)/.local
 BINDIR := $(PREFIX)/bin
@@ -38,11 +38,12 @@ install: install-app install-icons install-desktop
 
 install-app: check-deps
 	install -d '$(APPDIR)' '$(BINDIR)'
-	rm -rf '$(APPDIR)/assets' '$(APPDIR)/wubi_pics'
+	rm -rf '$(APPDIR)/assets' '$(APPDIR)/wubi_pics' '$(APPDIR)/tiger_pics'
 	rm -f '$(APPDIR)'/*.md
 	install -m 755 wubi_helper.py '$(APPDIR)/wubi_helper.py'
 	cp -R assets '$(APPDIR)/assets'
 	cp -R wubi_pics '$(APPDIR)/wubi_pics'
+	cp -R tiger_pics '$(APPDIR)/tiger_pics'
 	printf '%s\n' '#!/bin/sh' \
 		'exec $(PYTHON) "$(APPDIR)/wubi_helper.py" "$$@"' > '$(BINDIR)/$(APP_ID)'
 	chmod 755 '$(BINDIR)/$(APP_ID)'
@@ -62,14 +63,14 @@ install-desktop: install-app
 		'[Desktop Entry]' \
 		'Type=Application' \
 		'Name=$(APP_NAME)' \
-		'Comment=Look up Wubi codes and show key roots' \
+		'Comment=Look up Tiger and Wubi codes and show key roots' \
 		'Exec=$(BINDIR)/$(APP_ID)' \
 		'Icon=$(APP_ID)' \
 		'Terminal=false' \
 		'StartupWMClass=$(APP_WM_CLASS)' \
 		'StartupNotify=true' \
 		'Categories=Utility;' \
-		'Keywords=Wubi;Code;Input Method;Key Roots;' > '$(DESKTOPDIR)/$(APP_ID).desktop'
+		'Keywords=Tiger;Huma;Wubi;Code;Input Method;Key Roots;' > '$(DESKTOPDIR)/$(APP_ID).desktop'
 	chmod 644 '$(DESKTOPDIR)/$(APP_ID).desktop'
 	@command -v update-desktop-database >/dev/null && update-desktop-database '$(DESKTOPDIR)' >/dev/null 2>&1 || true
 
