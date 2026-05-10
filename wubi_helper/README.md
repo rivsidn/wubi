@@ -1,27 +1,13 @@
-# 五笔查询小工具
+# 虎码/五笔查询小工具
 
-这是一个按 `需求说明.md` 实现的桌面小工具，特点：
+这是一个桌面编码查询工具，默认用于查询虎码，也保留五笔 86、五笔 98 和新世纪五笔。特点：
 
 - 小窗口、默认置顶，方便随手切回来查字词编码；
-- 默认查询新世纪五笔，内置常用字词码表，所以不依赖系统安装新世纪词库；
-- 也可以切换到 86 版，读取系统里的 `ibus-table` 五笔 86 词库；
-- 也可以切换到 98 版（`--wubi-version 98`），使用内置 98 单字码表；
-- 查到编码后，会把主编码拆成最多 4 张字根图片展示，优先读取 `wubi_pics/` 里的自定义图片；
-- 可以通过命令行参数切换显示推荐码、最短码、最长码，适合学习阶段看全码；
-- 如果词库里没有这个词，会按 `打字规则.md` 里的词组规则自动推导编码。
-
-## 需求里还可以补充的点
-
-当前文档已经足够做一个可用版本，但如果后面要继续迭代，建议再明确这几项：
-
-1. 使用哪套词库/哪一版五笔
-   - 当前实现默认使用内置新世纪码表；如需 86 版或 98 版，可通过 `--wubi-version 86` / `--wubi-version 98` 切换。
-2. 一个字/词存在多个编码时怎么展示
-   - 当前实现主显示推荐码，同时在“其他编码”里列出剩余可用编码。
-3. 词库里查不到时怎么处理
-   - 当前实现会按 `打字规则.md` 的词组规则，用单字全码自动推导。
-4. 交付形式
-   - 当前实现是 Python 脚本，不是打包后的独立可执行文件。
+- 默认查询系统里的 `ibus-table` 虎码词库；
+- 同一个字词存在多个编码时，默认主显示最长码/全码，方便学习拆码；
+- 查询到编码后，会把主编码拆成最多 4 张键位图片展示；
+- 五笔 86 读取系统 `ibus-table` 词库，五笔 98 和新世纪五笔使用内置码表；
+- 五笔方案保留按词组规则推导编码；虎码方案只查数据库精确结果，未收录词显示未命中。
 
 ## 运行方式
 
@@ -29,50 +15,73 @@
 python3 wubi_helper.py
 ```
 
-默认会按“最长码”显示，方便练习全码。
-
-默认查询新世纪五笔。例如：
-
-```bash
-python3 wubi_helper.py --text 显 --code-mode longest
-```
-
-会返回新世纪版全码 `jogf`。如果需要查 98 版，可以指定：
-
-```bash
-python3 wubi_helper.py --text 显 --code-mode longest --wubi-version 98
-```
-
-如果需要查 86 版，可以指定：
-
-```bash
-python3 wubi_helper.py --text 显 --code-mode longest --wubi-version 86
-```
-
-新世纪版也可以显式指定：
-
-```bash
-python3 wubi_helper.py --text 显 --code-mode longest --wubi-version xinshiji
-python3 wubi_helper.py --text 输入法 --wubi-version 06
-```
-
-如果想切换显示方式，可以在启动时指定：
-
-```bash
-python3 wubi_helper.py --code-mode preferred
-python3 wubi_helper.py --code-mode shortest
-python3 wubi_helper.py --code-mode longest
-python3 wubi_helper.py --wubi-version 86
-python3 wubi_helper.py --wubi-version 98
-python3 wubi_helper.py --wubi-version xinshiji
-```
+默认方案是虎码，默认按“最长码”显示。例如虎码里 `中` 的主显示编码为 `dgs`，其他编码里会列出 `d`。
 
 如果只想在终端里查一次：
 
 ```bash
 python3 wubi_helper.py --text 中
-python3 wubi_helper.py --text 五笔编码
-python3 wubi_helper.py --text 中 --code-mode longest
+python3 wubi_helper.py --text 虎码
+python3 wubi_helper.py --text 中 --code-mode preferred
+```
+
+切换输入方案：
+
+```bash
+python3 wubi_helper.py --scheme tiger
+python3 wubi_helper.py --scheme wubi86
+python3 wubi_helper.py --scheme wubi98
+python3 wubi_helper.py --scheme xinshiji
+```
+
+CLI 查询示例：
+
+```bash
+python3 wubi_helper.py --scheme wubi86 --text 中 --code-mode longest
+python3 wubi_helper.py --scheme wubi98 --text 显 --code-mode longest
+python3 wubi_helper.py --scheme xinshiji --text 显 --code-mode longest
+```
+
+旧参数 `--wubi-version` 仍可用，会自动映射到对应五笔方案：
+
+```bash
+python3 wubi_helper.py --wubi-version 86 --text 中
+python3 wubi_helper.py --wubi-version 98 --text 显
+python3 wubi_helper.py --wubi-version xinshiji --text 显
+```
+
+可用编码显示方式：
+
+```bash
+python3 wubi_helper.py --code-mode preferred
+python3 wubi_helper.py --code-mode shortest
+python3 wubi_helper.py --code-mode longest
+```
+
+## 数据库和码表
+
+虎码直接依赖系统中已安装的 ibus-table 数据库，源码目录不需要 `tiger.db`。
+
+虎码默认查找：
+
+- `~/.local/share/ibus-table/tables/tiger-user.db`
+- `/usr/share/ibus-table/tables/tiger.db`
+
+五笔 86 默认查找：
+
+- `~/.local/share/ibus-table/tables/wubi-jidian86-user.db`
+- `/usr/share/ibus-table/tables/wubi-jidian86.db`
+- `/usr/share/ibus-table/tables/wubi-haifeng86.db`
+
+五笔 98 和新世纪五笔内置码表：
+
+- 98 单字码表：`assets/wubi98-single.tsv`
+- 新世纪五笔码表：`assets/wubi06.tsv`
+
+如需临时指定数据库，可传 `--db`，可重复传多次：
+
+```bash
+python3 wubi_helper.py --scheme tiger --db /usr/share/ibus-table/tables/tiger.db --text 中
 ```
 
 ## 安装和卸载
@@ -106,11 +115,12 @@ make uninstall
 
 ## 图片资源
 
-- 程序会按编码字母去 `wubi_pics/` 目录找对应图片，比如 `K.png`、`T.png`
-- 98 版优先读取 `wubi_pics/98wubi/`，86 版优先读取 `wubi_pics/86wubi/`
-- 新世纪版优先读取 `wubi_pics/xinshiji_wubi/`
-- 当前优先匹配大写文件名，支持 `png/jpg/jpeg/webp`
-- 如果某个键位没找到对应图片，会退回到程序内置的字根卡片样式
+- 虎码图片位于 `tiger_pics/`，由 `zigf.webp` 中的虎码字根图裁剪生成；运行时只依赖 `tiger_pics/`。
+- 五笔 86 优先读取 `wubi_pics/86wubi/`。
+- 五笔 98 优先读取 `wubi_pics/98wubi/`。
+- 新世纪五笔优先读取 `wubi_pics/xinshiji_wubi/`。
+- 程序会按编码字母找对应图片，比如 `D.png`、`G.png`、`S.png`。
+- 如果某个键位没有对应图片，五笔会退回到程序内置字根卡片；虎码会显示“暂无字根”。
 
 ## 码表来源
 
@@ -126,9 +136,6 @@ make uninstall
 - Python 3
 - Tkinter
 - Pillow
-- 查询 98 版、新世纪版不需要系统词库；查询 86 版需要本机已安装的 `ibus-table` 五笔词库数据库
-
-86 版数据库通常位于：
-
-- `/usr/share/ibus-table/tables/wubi-jidian86.db`
-- `~/.local/share/ibus-table/tables/wubi-jidian86-user.db`
+- 查询虎码需要本机已安装的 `ibus-table` 虎码词库数据库
+- 查询五笔 86 需要本机已安装的 `ibus-table` 五笔 86 词库数据库
+- 查询五笔 98、新世纪五笔不需要系统词库

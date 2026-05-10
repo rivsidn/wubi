@@ -63,6 +63,7 @@ class Wubi98RepositoryTest(unittest.TestCase):
         result = self.repository.query("显", code_mode="longest")
         self.assertIsNotNone(result)
         assert result is not None
+        self.assertEqual(result.scheme_id, "wubi98")
         self.assertEqual(result.wubi_version, "98")
         self.assertEqual(result.main_code, "jof")
         self.assertEqual(result.all_codes, ("jo", "jof"))
@@ -99,12 +100,13 @@ class WubiXinshijiRepositoryTest(unittest.TestCase):
         self.assertEqual(result.main_code, "jogf")
         self.assertEqual(result.all_codes, ("jo", "jog", "jogf"))
 
-    def test_default_version_is_xinshiji(self) -> None:
-        default_repository = WubiRepository()
+    def test_xinshiji_scheme_can_be_used(self) -> None:
+        default_repository = WubiRepository(scheme_id="xinshiji")
         try:
             result = default_repository.query("显", code_mode="longest")
             self.assertIsNotNone(result)
             assert result is not None
+            self.assertEqual(result.scheme_id, "xinshiji")
             self.assertEqual(result.wubi_version, "xinshiji")
             self.assertEqual(result.main_code, "jogf")
             self.assertEqual(result.all_codes, ("jo", "jog", "jogf"))
@@ -140,10 +142,42 @@ class WubiAppTest(unittest.TestCase):
             app.search()
             self.assertEqual(app.code_var.get(), "编码：-")
             self.assertEqual(app.alt_var.get(), "其他编码：-")
-            self.assertEqual(app.hit_var.get(), "命中结果：86 版未命中")
+            self.assertEqual(app.hit_var.get(), "命中结果：五笔86未命中")
             self.assertTrue(all(not card.canvas.find_all() for card in app.cards))
         finally:
             app.root.destroy()
+
+
+class TigerRepositoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.repository = WubiRepository()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.repository.close()
+
+    def test_default_scheme_is_tiger(self) -> None:
+        self.assertEqual(self.repository.scheme_id, "tiger")
+
+    def test_tiger_exact_match_uses_longest_code(self) -> None:
+        result = self.repository.query("中", code_mode="longest")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.main_code, "dgs")
+        self.assertEqual(result.other_codes, ("d",))
+        self.assertEqual(result.scheme_id, "tiger")
+        self.assertIsNone(result.wubi_version)
+
+    def test_tiger_exact_phrase(self) -> None:
+        result = self.repository.query("虎码", code_mode="longest")
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.main_code, "zhmn")
+        self.assertEqual(result.mode, "exact")
+
+    def test_tiger_does_not_derive_missing_phrase(self) -> None:
+        self.assertIsNone(self.repository.query("中根", code_mode="longest"))
 
 
 if __name__ == "__main__":

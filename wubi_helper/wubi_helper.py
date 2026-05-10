@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""五笔编码查询图形工具.
+"""虎码/五笔编码查询图形工具.
 
-默认读取内置新世纪五笔码表：
-- 支持 98 版、86 版、新世纪版五笔；
-- 98 版和新世纪版内置码表，86 版仍可读取 ibus-table 词库；
+默认读取系统 ibus-table 虎码词库：
+- 支持虎码，以及 98 版、86 版、新世纪版五笔；
+- 虎码直接读取系统词库，98 版和新世纪版内置码表，86 版仍可读取 ibus-table 词库；
 - 精确命中词库时，显示推荐编码和其他可用编码；
-- 词库未命中时，按 `打字规则.md` 中的词组规则推导编码；
+- 五笔词库未命中时，按 `打字规则.md` 中的词组规则推导编码；
 - 结果以字根卡片形式展示主编码对应的按键信息。
 """
 
@@ -31,14 +31,28 @@ class KeyMeta:
 
 
 @dataclass(frozen=True)
+class InputScheme:
+    scheme_id: str
+    label: str
+    db_candidates: tuple[Path, ...]
+    builtin_table: Path | None
+    image_dirs: tuple[Path, ...]
+    key_metas: dict[str, KeyMeta]
+    allow_derived: bool
+    wubi_version: str | None = None
+
+
+@dataclass(frozen=True)
 class QueryResult:
     text: str
     main_code: str
     all_codes: tuple[str, ...]
     mode: str
-    wubi_version: str
+    scheme_id: str
+    scheme_label: str
     code_mode: str
     note: str
+    wubi_version: str | None = None
 
     @property
     def other_codes(self) -> tuple[str, ...]:
@@ -83,11 +97,12 @@ ZONE_COLORS = {
     5: "#f6edab",
 }
 
-DEFAULT_WUBI_VERSION = "xinshiji"
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_SCHEME_ID = "tiger"
 WUBI_VERSION_LABELS = {
-    "98": "98 版",
-    "86": "86 版",
-    "xinshiji": "新世纪版",
+    "98": "五笔98",
+    "86": "五笔86",
+    "xinshiji": "新世纪五笔",
 }
 WUBI_VERSION_ALIASES = {
     "98": "98",
@@ -98,7 +113,12 @@ WUBI_VERSION_ALIASES = {
     "新世纪": "xinshiji",
 }
 
-DB_CANDIDATES = {
+TIGER_DB_CANDIDATES = (
+    Path.home() / ".local/share/ibus-table/tables/tiger-user.db",
+    Path("/usr/share/ibus-table/tables/tiger.db"),
+)
+
+WUBI_DB_CANDIDATES = {
     "86": (
         Path.home() / ".local/share/ibus-table/tables/wubi-jidian86-user.db",
         Path("/usr/share/ibus-table/tables/wubi-jidian86.db"),
@@ -121,23 +141,76 @@ DB_CANDIDATES = {
 }
 
 BUILTIN_CODE_TABLES = {
-    "98": Path(__file__).resolve().parent / "assets/wubi98-single.tsv",
-    "xinshiji": Path(__file__).resolve().parent / "assets/wubi06.tsv",
+    "98": BASE_DIR / "assets/wubi98-single.tsv",
+    "xinshiji": BASE_DIR / "assets/wubi06.tsv",
 }
 
-KEY_IMAGE_SUBDIRS = {
-    "86": ("86wubi",),
-    "98": ("98wubi",),
-    "xinshiji": ("xinshiji_wubi", "06wubi"),
-}
-
-KEY_IMAGE_DIR = Path(__file__).resolve().parent / "wubi_pics"
-APP_ICON_PATH = Path(__file__).resolve().parent / "assets/icons/wubi-helper-icon-256.png"
+WUBI_KEY_IMAGE_DIR = BASE_DIR / "wubi_pics"
+TIGER_KEY_IMAGE_DIR = BASE_DIR / "tiger_pics"
+APP_ICON_PATH = BASE_DIR / "assets/icons/wubi-helper-icon-256.png"
 APP_WM_CLASS = "Wubi-helper"
 CODE_MODE_LABELS = {
     "preferred": "推荐码",
     "shortest": "最短码",
     "longest": "最长码",
+}
+
+SCHEMES: dict[str, InputScheme] = {
+    "tiger": InputScheme(
+        scheme_id="tiger",
+        label="虎码",
+        db_candidates=TIGER_DB_CANDIDATES,
+        builtin_table=None,
+        image_dirs=(TIGER_KEY_IMAGE_DIR,),
+        key_metas={},
+        allow_derived=False,
+    ),
+    "wubi86": InputScheme(
+        scheme_id="wubi86",
+        label=WUBI_VERSION_LABELS["86"],
+        db_candidates=WUBI_DB_CANDIDATES["86"],
+        builtin_table=None,
+        image_dirs=(WUBI_KEY_IMAGE_DIR / "86wubi", WUBI_KEY_IMAGE_DIR),
+        key_metas=KEY_METAS,
+        allow_derived=True,
+        wubi_version="86",
+    ),
+    "wubi98": InputScheme(
+        scheme_id="wubi98",
+        label=WUBI_VERSION_LABELS["98"],
+        db_candidates=WUBI_DB_CANDIDATES["98"],
+        builtin_table=BUILTIN_CODE_TABLES["98"],
+        image_dirs=(WUBI_KEY_IMAGE_DIR / "98wubi", WUBI_KEY_IMAGE_DIR),
+        key_metas=KEY_METAS,
+        allow_derived=True,
+        wubi_version="98",
+    ),
+    "xinshiji": InputScheme(
+        scheme_id="xinshiji",
+        label=WUBI_VERSION_LABELS["xinshiji"],
+        db_candidates=WUBI_DB_CANDIDATES["xinshiji"],
+        builtin_table=BUILTIN_CODE_TABLES["xinshiji"],
+        image_dirs=(WUBI_KEY_IMAGE_DIR / "xinshiji_wubi", WUBI_KEY_IMAGE_DIR / "06wubi", WUBI_KEY_IMAGE_DIR),
+        key_metas=KEY_METAS,
+        allow_derived=True,
+        wubi_version="xinshiji",
+    ),
+}
+
+SCHEME_ALIASES = {
+    "tiger": "tiger",
+    "虎码": "tiger",
+    "wubi": "wubi86",
+    "wubi86": "wubi86",
+    "wubi-86": "wubi86",
+    "86": "wubi86",
+    "wubi98": "wubi98",
+    "wubi-98": "wubi98",
+    "98": "wubi98",
+    "xinshiji": "xinshiji",
+    "06": "xinshiji",
+    "new-century": "xinshiji",
+    "新世纪": "xinshiji",
 }
 
 
@@ -159,11 +232,38 @@ def normalize_wubi_version(wubi_version: str) -> str:
     return normalized
 
 
+def normalize_scheme_id(scheme_id: str) -> str:
+    normalized = SCHEME_ALIASES.get(scheme_id.strip().lower())
+    if normalized is None or normalized not in SCHEMES:
+        supported = " / ".join(SCHEMES)
+        raise ValueError(f"不支持的输入方案：{scheme_id}，可选：{supported}")
+    return normalized
+
+
+def scheme_id_from_wubi_version(wubi_version: str) -> str:
+    version = normalize_wubi_version(wubi_version)
+    if version == "86":
+        return "wubi86"
+    if version == "98":
+        return "wubi98"
+    return "xinshiji"
+
+
 class WubiRepository:
-    def __init__(self, db_paths: Iterable[Path] | None = None, wubi_version: str = DEFAULT_WUBI_VERSION) -> None:
-        self.wubi_version = normalize_wubi_version(wubi_version)
-        candidates = tuple(db_paths or DB_CANDIDATES[self.wubi_version])
-        self._builtin_codes = self._load_builtin_codes(BUILTIN_CODE_TABLES.get(self.wubi_version))
+    def __init__(
+        self,
+        db_paths: Iterable[Path] | None = None,
+        wubi_version: str | None = None,
+        *,
+        scheme_id: str | None = None,
+    ) -> None:
+        if scheme_id is None:
+            scheme_id = scheme_id_from_wubi_version(wubi_version) if wubi_version else DEFAULT_SCHEME_ID
+        self.scheme = SCHEMES[normalize_scheme_id(scheme_id)]
+        self.scheme_id = self.scheme.scheme_id
+        self.wubi_version = self.scheme.wubi_version or self.scheme.scheme_id
+        candidates = tuple(db_paths or self.scheme.db_candidates)
+        self._builtin_codes = self._load_builtin_codes(self.scheme.builtin_table)
         self._builtin_full_codes = {
             text: max(codes, key=len)
             for text, codes in self._builtin_codes.items()
@@ -173,16 +273,24 @@ class WubiRepository:
         self.db_paths = tuple(path for path in candidates if path.exists())
         self._connections = [sqlite3.connect(path) for path in self.db_paths]
         if not self._connections and not self._builtin_codes:
-            version_label = WUBI_VERSION_LABELS[self.wubi_version]
-            raise FileNotFoundError(f"未找到可用的{version_label}五笔词库数据库或内置码表。")
+            source_type = "词库数据库或内置码表" if self.scheme.builtin_table else "词库数据库"
+            raise FileNotFoundError(f"未找到可用的{self.scheme.label}{source_type}。")
         self._example_cache: dict[str, str] = {}
 
     @property
     def source_summary(self) -> str:
         sources = [path.name for path in self.db_paths]
         if self._builtin_codes:
-            sources.append(f"{WUBI_VERSION_LABELS[self.wubi_version]}内置码表")
-        return " / ".join(sources)
+            sources.append(f"{self.scheme.label}内置码表")
+        return f"{self.scheme.label}：" + " / ".join(sources)
+
+    @property
+    def image_dirs(self) -> tuple[Path, ...]:
+        return self.scheme.image_dirs
+
+    @property
+    def key_metas(self) -> dict[str, KeyMeta]:
+        return self.scheme.key_metas
 
     def _load_builtin_codes(self, path: Path | None) -> dict[str, tuple[str, ...]]:
         if path is None or not path.exists():
@@ -332,10 +440,15 @@ class WubiRepository:
                 main_code=main_code,
                 all_codes=exact_codes,
                 mode="exact",
-                wubi_version=self.wubi_version,
+                scheme_id=self.scheme_id,
+                scheme_label=self.scheme.label,
                 code_mode=code_mode,
-                note=f"{WUBI_VERSION_LABELS[self.wubi_version]}词库精确命中，当前按“{mode_label}”显示主编码；其余编码列为可用备选。",
+                note=f"{self.scheme.label}词库精确命中，当前按“{mode_label}”显示主编码；其余编码列为可用备选。",
+                wubi_version=self.scheme.wubi_version,
             )
+
+        if not self.scheme.allow_derived:
+            return None
 
         derived_code = self._derive_phrase_code(normalized)
         if derived_code:
@@ -344,9 +457,11 @@ class WubiRepository:
                 main_code=derived_code,
                 all_codes=(derived_code,),
                 mode="derived",
-                wubi_version=self.wubi_version,
+                scheme_id=self.scheme_id,
+                scheme_label=self.scheme.label,
                 code_mode=code_mode,
-                note=f"{WUBI_VERSION_LABELS[self.wubi_version]}词库未命中，结果按五笔词组规则由单字全码推导。",
+                note=f"{self.scheme.label}词库未命中，结果按五笔词组规则由单字全码推导。",
+                wubi_version=self.scheme.wubi_version,
             )
 
         return None
@@ -368,12 +483,13 @@ class KeyCard(ttk.Frame):
         self.canvas.pack()
 
     def render(self, key: str) -> None:
+        key = key.lower()
         image_path = self._resolve_image_path(key)
         if image_path is not None:
             self._draw_image(image_path)
             return
 
-        meta = KEY_METAS.get(key)
+        meta = self.repository.key_metas.get(key)
         if meta is None:
             self._draw_missing(key)
             return
@@ -437,14 +553,7 @@ class KeyCard(ttk.Frame):
         self.canvas.create_image(63, 63, image=self.image_ref, anchor="center")
 
     def _resolve_image_path(self, key: str) -> Path | None:
-        candidate_dirs = tuple(
-            KEY_IMAGE_DIR / subdir
-            for subdir in KEY_IMAGE_SUBDIRS.get(
-                self.repository.wubi_version,
-                (f"{self.repository.wubi_version}wubi",),
-            )
-        ) + (KEY_IMAGE_DIR,)
-        for directory in candidate_dirs:
+        for directory in self.repository.image_dirs:
             for suffix in (".png", ".PNG", ".jpg", ".JPG", ".jpeg", ".JPEG", ".webp", ".WEBP"):
                 path = directory / f"{key.upper()}{suffix}"
                 if path.exists():
@@ -492,14 +601,28 @@ class KeyCard(ttk.Frame):
 
 
 class WubiApp:
-    def __init__(self, repository: WubiRepository, topmost: bool = True, code_mode: str = "longest") -> None:
-        self.repository = repository
+    def __init__(
+        self,
+        repository: WubiRepository | None = None,
+        *,
+        scheme_id: str = DEFAULT_SCHEME_ID,
+        db_paths: Iterable[Path] | None = None,
+        topmost: bool = True,
+        code_mode: str = "longest",
+    ) -> None:
+        if repository is not None:
+            scheme_id = repository.scheme_id
+        self._initial_scheme_id = normalize_scheme_id(scheme_id)
+        self._initial_db_paths = tuple(db_paths) if db_paths else None
+        self._owns_repository = repository is None
+        self.repository = repository or WubiRepository(self._initial_db_paths, scheme_id=self._initial_scheme_id)
         self.code_mode = code_mode
         self.root = tk.Tk(className=APP_WM_CLASS)
-        self.root.title(f"五笔字词查询（{WUBI_VERSION_LABELS[repository.wubi_version]}）")
+        self.root.title(f"虎码/五笔字词查询（{self.repository.scheme.label}）")
         self.root.configure(bg="#faf7f2")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", topmost)
+        self.root.protocol("WM_DELETE_WINDOW", self.destroy)
         self.icon_ref: ImageTk.PhotoImage | None = None
         self._set_window_icon()
 
@@ -510,10 +633,12 @@ class WubiApp:
         self.root.geometry(f"{width}x{height}+{x}+48")
 
         self.topmost_var = tk.BooleanVar(value=topmost)
+        self.scheme_var = tk.StringVar(value=self.repository.scheme.label)
+        self._scheme_id_by_label = {scheme.label: scheme_id for scheme_id, scheme in SCHEMES.items()}
         self.query_var = tk.StringVar()
         self.code_var = tk.StringVar(value="编码：-")
         self.alt_var = tk.StringVar(value="其他编码：-")
-        self.hit_var = tk.StringVar(value=f"命中结果：-（{WUBI_VERSION_LABELS[repository.wubi_version]}）")
+        self.hit_var = tk.StringVar(value=f"命中结果：-（{self.repository.scheme.label}）")
 
         self._build_style()
         self._build_ui()
@@ -554,6 +679,17 @@ class WubiApp:
         query_panel = ttk.Frame(container, style="Panel.TFrame", padding=14)
         query_panel.pack(fill="x", pady=(0, 10))
 
+        scheme_box = ttk.Combobox(
+            query_panel,
+            textvariable=self.scheme_var,
+            values=tuple(scheme.label for scheme in SCHEMES.values()),
+            width=10,
+            state="readonly",
+            font=("Noto Sans CJK SC", 12),
+        )
+        scheme_box.pack(side="left", padx=(0, 10))
+        self.scheme_box = scheme_box
+
         entry = ttk.Entry(query_panel, textvariable=self.query_var, font=("Noto Sans CJK SC", 16))
         entry.pack(side="left", fill="x", expand=True)
         entry.focus_set()
@@ -579,20 +715,55 @@ class WubiApp:
 
     def _bind_events(self) -> None:
         self.root.bind("<Return>", lambda _event: self.search())
-        self.root.bind("<Escape>", lambda _event: self.root.destroy())
+        self.root.bind("<Escape>", lambda _event: self.destroy())
         self.root.bind("<Control-l>", lambda _event: self.clear())
         self.root.bind("<Control-f>", lambda _event: self.entry.focus_set())
         self.root.bind("<Control-t>", lambda _event: self._toggle_topmost())
+        self.scheme_box.bind("<<ComboboxSelected>>", self._switch_scheme)
 
     def _toggle_topmost(self) -> None:
         self.topmost_var.set(not self.topmost_var.get())
         self.root.attributes("-topmost", self.topmost_var.get())
 
+    def _db_paths_for_scheme(self, scheme_id: str) -> tuple[Path, ...] | None:
+        if scheme_id == self._initial_scheme_id:
+            return self._initial_db_paths
+        return None
+
+    def _refresh_scheme_title(self) -> None:
+        self.root.title(f"虎码/五笔字词查询（{self.repository.scheme.label}）")
+
+    def _switch_scheme(self, _event: tk.Event | None = None) -> None:
+        scheme_id = self._scheme_id_by_label.get(self.scheme_var.get(), DEFAULT_SCHEME_ID)
+        if scheme_id == self.repository.scheme_id:
+            return
+
+        try:
+            repository = WubiRepository(self._db_paths_for_scheme(scheme_id), scheme_id=scheme_id)
+        except (FileNotFoundError, ValueError) as exc:
+            self.scheme_var.set(self.repository.scheme.label)
+            messagebox.showerror("虎码/五笔字词查询", str(exc))
+            return
+
+        old_repository = self.repository
+        old_owned = self._owns_repository
+        self.repository = repository
+        self._owns_repository = True
+        for card in self.cards:
+            card.repository = repository
+            card.clear()
+        if old_owned:
+            old_repository.close()
+
+        self._refresh_scheme_title()
+        self.clear()
+        self.hit_var.set(f"当前方案：{self.repository.scheme.label}")
+
     def clear(self) -> None:
         self.query_var.set("")
         self.code_var.set("编码：-")
         self.alt_var.set("其他编码：-")
-        self.hit_var.set(f"命中结果：-（{WUBI_VERSION_LABELS[self.repository.wubi_version]}）")
+        self.hit_var.set(f"命中结果：-（{self.repository.scheme.label}）")
         self.entry.focus_set()
         for card in self.cards:
             card.clear()
@@ -610,7 +781,7 @@ class WubiApp:
         if result is None or result.mode != "exact":
             self.code_var.set("编码：-")
             self.alt_var.set("其他编码：-")
-            self.hit_var.set(f"命中结果：{WUBI_VERSION_LABELS[self.repository.wubi_version]}未命中")
+            self.hit_var.set(f"命中结果：{self.repository.scheme.label}未命中")
             return
 
         self.code_var.set(f"编码：{result.main_code}")
@@ -618,20 +789,29 @@ class WubiApp:
             self.alt_var.set(f"其他编码：{' / '.join(result.other_codes)}")
         else:
             self.alt_var.set("其他编码：-")
-        self.hit_var.set(f"命中结果：{WUBI_VERSION_LABELS[self.repository.wubi_version]}精确命中")
+        self.hit_var.set(f"命中结果：{self.repository.scheme.label}精确命中")
         for card, key in zip(self.cards, result.main_code[:4]):
             card.render(key)
 
     def run(self) -> None:
         self.root.mainloop()
 
+    def close_repository(self) -> None:
+        if self._owns_repository:
+            self.repository.close()
+            self._owns_repository = False
+
+    def destroy(self) -> None:
+        self.close_repository()
+        self.root.destroy()
+
 
 def build_cli_result_text(result: QueryResult | None) -> str:
     if result is None:
         return "未找到可用编码。"
     lines = [
+        f"方案：{result.scheme_label}",
         f"字词：{result.text}",
-        f"五笔版本：{WUBI_VERSION_LABELS.get(result.wubi_version, result.wubi_version)}",
         f"主显示编码：{result.main_code}",
         f"所有编码：{' / '.join(result.all_codes)}",
         f"结果类型：{'精确匹配' if result.mode == 'exact' else '规则推导'}",
@@ -642,15 +822,19 @@ def build_cli_result_text(result: QueryResult | None) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="五笔编码查询工具")
+    parser = argparse.ArgumentParser(description="虎码/五笔编码查询工具")
     parser.add_argument("--text", help="直接查询并在终端输出结果，不打开图形界面")
+    parser.add_argument(
+        "--scheme",
+        choices=tuple(SCHEMES),
+        help="输入方案：tiger=虎码（默认），wubi86=五笔86，wubi98=五笔98，xinshiji=新世纪五笔",
+    )
     parser.add_argument("--db", action="append", help="手动指定词库数据库路径，可传多次")
     parser.add_argument("--no-topmost", action="store_true", help="启动时取消窗口置顶")
     parser.add_argument(
         "--wubi-version",
         metavar="VERSION",
-        default=DEFAULT_WUBI_VERSION,
-        help="五笔版本：xinshiji/06=新世纪版（默认），98=98 版，86=86 版",
+        help="兼容旧参数：xinshiji/06=新世纪五笔，98=五笔98，86=五笔86",
     )
     parser.add_argument(
         "--code-mode",
@@ -664,25 +848,40 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     db_paths = tuple(Path(path) for path in args.db) if args.db else None
-
     try:
-        repository = WubiRepository(db_paths, wubi_version=args.wubi_version)
-    except (FileNotFoundError, ValueError) as exc:
-        if args.text:
-            print(str(exc))
-            return
-        messagebox.showerror("五笔字词查询", str(exc))
+        scheme_id = normalize_scheme_id(args.scheme) if args.scheme else (
+            scheme_id_from_wubi_version(args.wubi_version) if args.wubi_version else DEFAULT_SCHEME_ID
+        )
+    except ValueError as exc:
+        print(str(exc))
         return
 
-    try:
-        if args.text:
+    if args.text:
+        try:
+            repository = WubiRepository(db_paths, scheme_id=scheme_id)
+        except (FileNotFoundError, ValueError) as exc:
+            print(str(exc))
+            return
+        try:
             print(build_cli_result_text(repository.query(args.text, code_mode=args.code_mode)))
             return
+        finally:
+            repository.close()
 
-        app = WubiApp(repository, topmost=not args.no_topmost, code_mode=args.code_mode)
+    try:
+        app = WubiApp(
+            scheme_id=scheme_id,
+            db_paths=db_paths,
+            topmost=not args.no_topmost,
+            code_mode=args.code_mode,
+        )
         app.run()
+    except (FileNotFoundError, ValueError) as exc:
+        messagebox.showerror("虎码/五笔字词查询", str(exc))
+        return
     finally:
-        repository.close()
+        if "app" in locals():
+            app.close_repository()
 
 
 if __name__ == "__main__":
